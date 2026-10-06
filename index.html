@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LeadPing — заявки без забытых follow-up</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--text:#171923;--muted:#697386;--line:#e6e8ef;--accent:#635bff;--danger:#d92d20;--ok:#168a5b;--shadow:0 8px 30px rgba(25,30,55,.07)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 Inter,system-ui,-apple-system,Segoe UI,sans-serif}
+button,input,select,textarea{font:inherit}button{cursor:pointer;border:0}.wrap{max-width:1180px;margin:auto;padding:24px}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
+.brand{display:flex;gap:12px;align-items:center}.logo{width:42px;height:42px;border-radius:12px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:800;font-size:19px}
+h1{font-size:22px;margin:0}.sub{color:var(--muted);font-size:13px}
+.btn{padding:10px 14px;border-radius:10px;background:#fff;border:1px solid var(--line);font-weight:600}.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}.btn.danger{color:var(--danger)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow)}.stat b{display:block;font-size:27px;margin-top:4px}.stat small{color:var(--muted)}
+.layout{display:grid;grid-template-columns:1.6fr .9fr;gap:16px}.card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}.cardhead{padding:15px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;align-items:center}.cardhead h2{font-size:16px;margin:0}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap}.toolbar input,.toolbar select{border:1px solid var(--line);border-radius:9px;padding:9px 10px;background:#fff}
+.lead{padding:15px 16px;border-bottom:1px solid var(--line);display:grid;grid-template-columns:1.3fr .9fr .7fr auto;gap:12px;align-items:center}.lead:last-child{border-bottom:0}.name{font-weight:700}.meta{font-size:12px;color:var(--muted);margin-top:2px}.pill{display:inline-block;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:700;background:#eef0f5}.pill.new{background:#eeeaff;color:#5148d8}.pill.follow{background:#fff1dc;color:#a05a00}.pill.won{background:#e4f8ee;color:#08744a}.pill.lost{background:#fce9e7;color:#a4261b}.due{font-size:13px}.overdue{color:var(--danger);font-weight:700}.today{color:var(--ok);font-weight:700}.actions{display:flex;gap:6px}.icon{width:34px;height:34px;border-radius:9px;background:#f2f3f7}
+.side{padding:16px}.side h3{margin:0 0 8px;font-size:15px}.template{border:1px solid var(--line);border-radius:10px;padding:11px;margin:9px 0;background:#fafbfc}.template b{font-size:13px}.template p{font-size:13px;color:#4b5565;margin:5px 0 9px}.template button{padding:6px 8px;border-radius:8px;background:#fff;border:1px solid var(--line);font-size:12px}
+.empty{text-align:center;padding:38px 20px;color:var(--muted)}.note{padding:11px 12px;background:#f4f3ff;border-radius:10px;color:#4338a8;font-size:13px;margin-top:14px}
+.modal{position:fixed;inset:0;background:rgba(16,20,35,.45);display:none;align-items:center;justify-content:center;padding:20px;z-index:10}.modal.show{display:flex}.modalbox{width:min(560px,100%);background:#fff;border-radius:16px;padding:20px;box-shadow:0 25px 80px rgba(0,0,0,.2)}.modalbox h2{margin:0 0 15px}.form{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{display:flex;flex-direction:column;gap:6px}.field.full{grid-column:1/-1}.field label{font-size:12px;font-weight:700;color:#4b5565}.field input,.field select,.field textarea{border:1px solid var(--line);border-radius:9px;padding:10px}.field textarea{min-height:80px;resize:vertical}.modalactions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+@media(max-width:850px){.grid{grid-template-columns:repeat(2,1fr)}.layout{grid-template-columns:1fr}.lead{grid-template-columns:1fr auto}.lead .hide-m{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="brand"><div class="logo">LP</div><div><h1>LeadPing</h1><div class="sub">Ни одна заявка не должна пропасть</div></div></div>
+  <div class="toolbar"><button class="btn" onclick="exportExcel()">Экспорт в Excel</button><button class="btn primary" onclick="openModal()">+ Новая заявка</button></div>
+</header>
+
+<div class="grid">
+  <div class="stat"><small>Всего заявок</small><b id="sAll">0</b></div>
+  <div class="stat"><small>Нужно сделать сегодня</small><b id="sToday">0</b></div>
+  <div class="stat"><small>Просрочено</small><b id="sOver">0</b></div>
+  <div class="stat"><small>Выиграно</small><b id="sWon">0</b></div>
+</div>
+
+<div class="layout">
+<section class="card">
+  <div class="cardhead">
+    <h2>Входящие заявки</h2>
+    <div class="toolbar"><input id="q" placeholder="Поиск…" oninput="render()"><select id="filter" onchange="render()"><option value="all">Все</option><option value="today">Сегодня</option><option value="overdue">Просрочены</option><option value="new">Новые</option><option value="follow">Follow-up</option><option value="won">Выиграны</option></select></div>
+  </div>
+  <div id="list"></div>
+</section>
+
+<aside class="card">
+  <div class="side">
+    <h3>Готовые сообщения</h3>
+    <div class="template editable" data-index="0"><b>Первый ответ</b><p contenteditable="true">Здравствуйте, {{name}}! Спасибо за обращение. Могу уточнить пару деталей и предложить ближайшее время?</p><button onclick="copyTemplate(0)">Скопировать</button><button onclick="editTemplate(0)">Сохранить</button></div>
+    <div class="template editable" data-index="1"><b>Мягкий follow-up</b><p contenteditable="true">Здравствуйте, {{name}}! Возвращаюсь к вашему запросу. Актуально ещё помочь? Могу предложить несколько вариантов.</p><button onclick="copyTemplate(1)">Скопировать</button><button onclick="editTemplate(1)">Сохранить</button></div>
+    <div class="template editable" data-index="2"><b>После расчёта</b><p contenteditable="true">Здравствуйте, {{name}}! Подскажите, удалось посмотреть предложение? Если есть вопросы — быстро всё уточню.</p><button onclick="copyTemplate(2)">Скопировать</button><button onclick="editTemplate(2)">Сохранить</button></div>
+    <div class="note"><b>Как пользоваться:</b> добавьте заявку → назначьте следующий контакт → каждый день смотрите «Сегодня». MVP хранит данные прямо в браузере, без сервера.</div>
+  </div>
+</aside>
+</div>
+</div>
+
+<div class="modal" id="modal" onclick="if(event.target===this)closeModal()">
+<div class="modalbox">
+<h2>Новая заявка</h2>
+<div class="form">
+<div class="field"><label>Имя клиента *</label><input id="fName" placeholder="Анна"></div>
+<div class="field"><label>Контакт</label><input id="fContact" placeholder="+371… / @username"></div>
+<div class="field"><label>Источник</label><select id="fSource"><option>Instagram</option><option>WhatsApp</option><option>Телефон</option><option>Сайт</option><option>Telegram</option><option>Другое</option></select></div>
+<div class="field"><label>Статус</label><select id="fStatus"><option value="new">Новая</option><option value="follow">Follow-up</option><option value="won">Выиграна</option><option value="lost">Потеряна</option></select></div>
+<div class="field"><label>Следующий контакт *</label><input id="fDate" type="date"></div>
+<div class="field"><label>Сумма, €</label><input id="fValue" type="number" min="0" placeholder="150"></div>
+<div class="field full"><label>Заметка</label><textarea id="fNote" placeholder="Что нужно клиенту, что обещали сделать…"></textarea></div>
+</div>
+<div class="modalactions"><button class="btn" onclick="closeModal()">Отмена</button><button class="btn primary" onclick="saveLead()">Сохранить</button></div>
+</div>
+</div>
+
+<script>
+const KEY='leadping_v1';
+const templates=[
+'Здравствуйте, {{name}}! Спасибо за обращение. Могу уточнить пару деталей и предложить ближайшее время?',
+'Здравствуйте, {{name}}! Возвращаюсь к вашему запросу. Актуально ещё помочь? Могу предложить несколько вариантов.',
+'Здравствуйте, {{name}}! Подскажите, удалось посмотреть предложение? Если есть вопросы — быстро всё уточню.'
+];
+let leads=JSON.parse(localStorage.getItem(KEY)||'null')||[
+{id:1,name:'Анна',contact:'@anna',source:'Instagram',status:'follow',next:addDays(-1),value:120,note:'Уточнить удобное время'},
+{id:2,name:'Марк',contact:'+371 2…',source:'Телефон',status:'new',next:addDays(0),value:250,note:'Нужен расчёт'},
+{id:3,name:'Елена',contact:'@elena',source:'WhatsApp',status:'won',next:addDays(2),value:180,note:'Записалась на услугу'}
+];
+function addDays(n){let d=new Date();d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)}
+function save(){localStorage.setItem(KEY,JSON.stringify(leads))}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function statusLabel(s){return {new:'Новая',follow:'Follow-up',won:'Выиграна',lost:'Потеряна'}[s]||s}
+function dateText(d){
+ if(!d)return '—'; const today=new Date();today.setHours(0,0,0,0);const x=new Date(d+'T00:00:00');const diff=Math.round((x-today)/86400000);
+ if(diff<0)return `<span class="overdue">просрочено на ${Math.abs(diff)} дн.</span>`;
+ if(diff===0)return '<span class="today">сегодня</span>';
+ if(diff===1)return '<span class="today">завтра</span>';
+ return x.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'});
+}
+function render(){
+ const q=document.getElementById('q').value.toLowerCase(), f=document.getElementById('filter').value;
+ const today=addDays(0);
+ let arr=leads.filter(x=>(!q||(`${x.name} ${x.contact} ${x.source} ${x.note}`).toLowerCase().includes(q)));
+ arr=arr.filter(x=>{
+  if(f==='today')return x.next===today&&x.status!=='won'&&x.status!=='lost';
+  if(f==='overdue')return x.next<today&&x.status!=='won'&&x.status!=='lost';
+  if(f==='all')return true; return x.status===f;
+ });
+ arr.sort((a,b)=>(a.next||'9999').localeCompare(b.next||'9999'));
+ document.getElementById('list').innerHTML=arr.length?arr.map(x=>`
+ <div class="lead">
+   <div><div class="name">${esc(x.name)}</div><div class="meta">${esc(x.contact||'')} · ${esc(x.source)} ${x.value?`· €${x.value}`:''}</div></div>
+   <div><span class="pill ${x.status}">${statusLabel(x.status)}</span></div>
+   <div class="due hide-m">${dateText(x.next)}</div>
+   <div class="actions"><button class="icon" title="Сдвинуть на сегодня" onclick="todayLead(${x.id})">⏰</button><button class="icon" title="Изменить" onclick="editLead(${x.id})">✎</button><button class="icon" title="Удалить" onclick="removeLead(${x.id})">×</button>
+ </div>
+ </div>`).join(''):'<div class="empty">Заявок не найдено.<br>Добавьте первую — и начинайте вести follow-up.</div>';
+ const active=leads.filter(x=>x.status!=='lost'), over=active.filter(x=>x.next<today), tod=active.filter(x=>x.next===today), won=leads.filter(x=>x.status==='won');
+ document.getElementById('sAll').textContent=leads.length;document.getElementById('sToday').textContent=tod.length;document.getElementById('sOver').textContent=over.length;document.getElementById('sWon').textContent=won.length;
+}
+function openModal(id){
+ document.getElementById('modal').classList.add('show');
+ if(id){let x=leads.find(a=>a.id===id);document.getElementById('modal').dataset.id=id;fName.value=x.name;fContact.value=x.contact||'';fSource.value=x.source;fStatus.value=x.status;fDate.value=x.next;fValue.value=x.value||'';fNote.value=x.note||'';}
+ else {document.getElementById('modal').dataset.id='';document.getElementById('fName').value='';document.getElementById('fContact').value='';document.getElementById('fDate').value=addDays(0);document.getElementById('fValue').value='';document.getElementById('fNote').value='';}
+}
+function closeModal(){document.getElementById('modal').classList.remove('show')}
+function saveLead(){
+ const name=fName.value.trim();if(!name||!fDate.value){alert('Укажите имя и дату следующего контакта.');return}
+ const id=+document.getElementById('modal').dataset.id;
+ const obj={id:id||Date.now(),name,contact:fContact.value.trim(),source:fSource.value,status:fStatus.value,next:fDate.value,value:+fValue.value||0,note:fNote.value.trim()};
+ if(id) leads=leads.map(x=>x.id===id?obj:x); else leads.push(obj);
+ save();closeModal();render();
+}
+function editLead(id){openModal(id)}
+function removeLead(id){if(confirm('Удалить заявку?')){leads=leads.filter(x=>x.id!==id);save();render()}}
+function todayLead(id){leads=leads.map(x=>x.id===id?{...x,next:addDays(0)}:x);save();render()}
+function copyTemplate(i){navigator.clipboard?.writeText(templates[i]);alert('Шаблон скопирован.')}
+function editTemplate(i){
+ const p=document.querySelector(`.template[data-index="${i}"] p`);
+ templates[i]=p.textContent.trim();
+ alert('Шаблон сохранён.');
+}
+
+/* ---------- Экспорт в Excel (.xls как HTML-таблица с заданными ширинами колонок) ---------- */
+function escHtml(s){
+  return String(s??'')
+    .replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))
+    .replace(/\r?\n/g, '<br>');
+}
+
+function exportExcel(){
+  const today = addDays(0);
+  const statusOrder = { new:0, follow:1, won:2, lost:3 };
+
+  const fmtDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('ru-RU') : '';
+  const daysLeft = d => d
+    ? Math.round((new Date(d + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000)
+    : '';
+
+  // Сортировка: Новая → Follow-up → Выиграна → Потеряна, внутри — по дате, затем по имени
+  const sorted = leads.slice().sort((a, b) => {
+    const so = (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9);
+    if (so) return so;
+    return (a.next || '9999-99-99').localeCompare(b.next || '9999-99-99')
+        || a.name.localeCompare(b.name, 'ru');
+  });
+
+  const header = ['№','Имя','Контакт','Источник','Статус','Следующий контакт','Дней до контакта','Сумма, €','Заметка'];
+
+  const rows = sorted.map((x, i) => [
+    i + 1,
+    x.name,
+    x.contact || '',
+    x.source || '',
+    statusLabel(x.status),
+    fmtDate(x.next),
+    daysLeft(x.next),            // минус = просрочено, 0 = сегодня
+    x.value || 0,
+    x.note || ''
+  ]);
+
+  // Ширина каждой колонки = самая длинная ячейка (+ запас), но не уже 90px и не шире 480px
+  const widths = header.map((h, col) => {
+    let max = String(h).length;
+    rows.forEach(r => {
+      const len = String(r[col] ?? '').split('\n').reduce((a, s) => Math.max(a, s.length), 0);
+      if (len > max) max = len;
+    });
+    return Math.min(Math.max((max + 5) * 8, 90), 480);   // ~8px на символ + запас
+  });
+
+  let html =
+    '<html xmlns:o="urn:schemas-microsoft-com:office:office" ' +
+    'xmlns:x="urn:schemas-microsoft-com:office:excel" ' +
+    'xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8">' +
+    '<style>' +
+    'table{border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:11pt}' +
+    'td,th{border:1px solid #c9ccd4;padding:5px 9px;vertical-align:top;white-space:normal}' +
+    'th{background:#eef0f5;font-weight:bold;text-align:left;vertical-align:middle}' +
+    'td.c-num{text-align:right}' +
+    'td.c-date{text-align:center}' +
+    '</style></head><body><table>';
+
+  // фиксируем ширины колонок
+  html += '<colgroup>' + widths.map(w => `<col style="width:${w}px">`).join('') + '</colgroup>';
+
+  // шапка
+  html += '<tr>' + header.map(h => `<th>${escHtml(h)}</th>`).join('') + '</tr>';
+
+  // строки
+  rows.forEach(r => {
+    html += '<tr>';
+    r.forEach((c, i) => {
+      let cls = '';
+      if (i === 0 || i === 6 || i === 7) cls = ' class="c-num"';   // №, дней, сумма
+      else if (i === 5) cls = ' class="c-date"';                    // дата
+      html += `<td${cls}>${escHtml(c)}</td>`;
+    });
+    html += '</tr>';
+  });
+
+  html += '</table></body></html>';
+
+  const blob = new Blob(['\ufeff' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `leadping-${addDays(0)}.xls`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(a.href);
+}
+/* --------------------------------------------------------------------------------------- */
+
+render();
+</script>
+</body>
+</html>
